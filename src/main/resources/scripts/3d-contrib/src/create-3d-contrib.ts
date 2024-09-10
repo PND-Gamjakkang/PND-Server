@@ -270,51 +270,62 @@ export const create3DContrib = (
     if (repositoryInfo.contributions.length === 0) {
         return; // 기여 정보가 없으면 함수 종료
     }
-      
+
     // 최종적으로 생성할 시작 날짜와 종료 날짜를 계산
     const currentDate = new Date();
-    const oneYearAgo = new Date(currentDate);
-    oneYearAgo.setFullYear(currentDate.getFullYear() - 1);
 
-    // 기여 데이터 중 가장 이른 날짜와 가장 늦은 날짜를 찾기 위해 초기화
-    let firstContributionDate = new Date(repositoryInfo.contributions[0].date);
+    // 기여 데이터 중 가장 늦은 날짜를 찾기 위해 초기화
     let lastContributionDate = new Date(repositoryInfo.contributions[0].date);
 
-    // 모든 기여 데이터의 날짜를 비교하여 가장 이른 날짜와 가장 늦은 날짜를 찾음
+    // 모든 기여 데이터의 날짜를 비교하여 가장 늦은 날짜를 찾음
     repositoryInfo.contributions.forEach(contribution => {
         const contributionDate = new Date(contribution.date);
-        if (contributionDate < firstContributionDate) {
-            firstContributionDate = contributionDate;
-        }
         if (contributionDate > lastContributionDate) {
             lastContributionDate = contributionDate;
         }
     });
 
-    // 최소 5개월 동안의 블록을 생성하기 위해 5개월 전 날짜를 계산
-    const fiveMonthsAgo = new Date(lastContributionDate);
+    // 종료 날짜를 가장 늦은 기여 날짜로 설정하고, 7일 단위로 조정
+    let endDate = new Date(lastContributionDate);
+    endDate.setDate(endDate.getDate() + (6 - endDate.getDay())); // 해당 주의 토요일로 맞춤
+
+    // 시작 날짜를 계산하기 위한 기본 기간 (5개월 전)
+    const fiveMonthsAgo = new Date(endDate);
     fiveMonthsAgo.setMonth(fiveMonthsAgo.getMonth() - 5);
 
-    // 실제 시작 날짜는 첫 기여 날짜와 5개월 전 날짜 중 더 이른 날짜로 설정
-    const startDate = firstContributionDate < fiveMonthsAgo ? firstContributionDate : fiveMonthsAgo;
+    // 첫 기여 날짜 가져오기
+    let firstContributionDate = new Date(repositoryInfo.contributions[0].date);
 
-    // 실제 종료 날짜는 현재 날짜와 최대 1년 전 날짜 중 더 늦은 날짜로 설정
-    const endDate = lastContributionDate > oneYearAgo ? lastContributionDate : oneYearAgo;
+    // 모든 기여 데이터의 날짜를 비교하여 가장 이른 날짜를 찾음
+    repositoryInfo.contributions.forEach(contribution => {
+        const contributionDate = new Date(contribution.date);
+        if (contributionDate < firstContributionDate) {
+            firstContributionDate = contributionDate;
+        }
+    });
+
+    // 첫 기여 날짜와 종료 날짜 간의 차이를 계산
+    const dateDifference = diffDate(firstContributionDate.getTime(), endDate.getTime());
+
+    // 시작 날짜를 계산
+    let startDate;
+    if (dateDifference < 5 * 30) { // 5개월 미만일 경우
+        startDate = new Date(endDate);
+        startDate.setMonth(startDate.getMonth() - 5);
+    } else if (dateDifference >= 5 * 30 && dateDifference < 12 * 30) { // 5개월 이상 1년 미만일 경우
+        startDate = new Date(firstContributionDate);
+    } else { // 1년 이상일 경우
+        startDate = new Date(endDate);
+        startDate.setFullYear(startDate.getFullYear() - 1);
+    }
+
+    // 시작 날짜를 7일 단위로 조정
+    startDate.setDate(startDate.getDate() - startDate.getDay());
 
     // 기본 블록 날짜 배열 생성
     const allDates: Date[] = [];
     for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
         allDates.push(new Date(d.getTime())); // Date 객체를 복사하여 배열에 추가
-    }
-
-    // 일주일 단위로 직사각형을 맞추기 위해 추가 날짜 생성
-    const remainder = allDates.length % 7;
-    if (remainder !== 0) {
-        const extraDays = 7 - remainder;
-        for (let i = 0; i < extraDays; i++) {
-            endDate.setDate(endDate.getDate() + 1);
-            allDates.push(new Date(endDate.getTime()));
-        }
     }
 
     // 모든 날짜에 대해 기본 블럭 설정
@@ -324,7 +335,7 @@ export const create3DContrib = (
         contributionLevel: 0,
     }));
 
-    // 실제 기여 데이터를 병합
+    // 실제 기여 데이터를 병합 (기여 데이터가 기본 잔디 블록 범위 내에 포함됨)
     repositoryInfo.contributions.forEach(cal => {
         const dateKey = cal.date.toISOString().split('T')[0]; // 날짜만 추출하여 키로 사용
         const existing = fullYearData.find(entry => entry.date.toISOString().split('T')[0] === dateKey);
@@ -337,13 +348,14 @@ export const create3DContrib = (
     // fullYearData를 그대로 사용
     const contributionsArray = fullYearData;
 
+
     // 날짜 순으로 정렬
     contributionsArray.sort((a, b) => a.date.getTime() - b.date.getTime());
 
     // 기여 시작 시간을 가져옴
     const startTime = contributionsArray[0].date.getTime(); 
-
     // const startTime = repositoryInfo.contributions[0].date.getTime(); // 기여 시작 시간을 가져옴
+
     const dx = width / 64; // 주간 칸 너비 계산(64)
     const dy = dx * Math.tan(ANGLE * ((2 * Math.PI) / 360)); // 주간 칸 높이 계산 (3D 효과를 위해 각도 적용)
     const weekcount = Math.ceil(contributionsArray.length / 7.0); // 총 주 수 계산
@@ -378,9 +390,8 @@ export const create3DContrib = (
         const baseY = offsetY + (week + dayOfWeek) * dy; // 기여의 Y 좌표 계산
 
         // 로그 추가: 각 블록의 위치와 관련된 값들을 출력
-        console.log(`Date: ${cal.date}, DayOfWeek: ${dayOfWeek}, Week: ${week}`);
-        console.log(`BaseX: ${baseX}, BaseY: ${baseY}`);
-
+        // console.log(`Date: ${cal.date}, DayOfWeek: ${dayOfWeek}, Week: ${week}`);
+        // console.log(`BaseX: ${baseX}, BaseY: ${baseY}`);
 
         const calHeight = Math.log10(cal.contributionCount / 20 + 1) * 144 + 3; // 기여 수에 따른 칸 높이 계산
         const contribLevel = cal.contributionLevel; // 기여 레벨 가져오기
