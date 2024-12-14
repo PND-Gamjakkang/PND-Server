@@ -9,7 +9,7 @@
 ![GitHub stars](https://img.shields.io/github/stars/PND-Gamjakkang/PND-Server?style=social)
 ![GitHub license](https://img.shields.io/github/license/PND-Gamjakkang/PND-Server)
 
-제20회 한성공학경진대회 - PND (Back-End)
+PND (Back-End)
 
 <br><br>
 
